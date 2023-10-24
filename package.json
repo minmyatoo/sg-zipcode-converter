@@ -11,7 +11,7 @@
   "author": "Min Myat Oo",
   "license": "ISC",
   "dependencies": {
-    "@types/node": "^18.15.11",
+    "@types/node": "^20.0.0",
     "axios": "^1.3.4",
     "commander": "^11.0.0",
     "dotenv": "^16.0.3",

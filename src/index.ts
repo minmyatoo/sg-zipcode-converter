@@ -1,21 +1,17 @@
 // Import dependencies
 import axios from "axios";
-import dotenv from "dotenv";
 import { Command } from "commander";
 import fs from "fs";
 
-// Load environment variables
-dotenv.config();
-
-// Set up OneMap API endpoint and API key
-const ONEMAP_API_KEY = process.env.ONEMAP_API_KEY;
-const ONEMAP_API_URL = "https://developers.onemap.sg/commonapi/search";
+// Set up OneMap API endpoint
+const ONEMAP_API_URL = "https://www.onemap.gov.sg/api/common/elastic/search";
 
 // Define interface for address object
 interface Address {
     address: string;
     latitude: number;
     longitude: number;
+    zipCode?: string;
 }
 
 // Define interface for zip code object
@@ -45,7 +41,7 @@ function saveAddressesToFile(zipCode: string, addresses: Address[]): void {
  * @param {boolean} saveToFile - Whether to save the addresses to a file.
  * @returns {Promise<void>} - A promise that resolves with the converted addresses.
  */
-async function convertZipCodeToAddress(zipCode: string, saveToFile: boolean): Promise<void> {
+export async function convertZipCodeToAddress(zipCode: string, saveToFile: boolean = false): Promise<Address[]> {
     try {
         const response = await axios.get(ONEMAP_API_URL, {
             params: {
@@ -53,7 +49,6 @@ async function convertZipCodeToAddress(zipCode: string, saveToFile: boolean): Pr
                 returnGeom: "Y",
                 getAddrDetails: "Y",
                 pageNum: 1,
-                key: ONEMAP_API_KEY,
             },
         });
 
@@ -64,6 +59,7 @@ async function convertZipCodeToAddress(zipCode: string, saveToFile: boolean): Pr
                 address: result.ADDRESS,
                 latitude: parseFloat(result.LATITUDE),
                 longitude: parseFloat(result.LONGITUDE),
+                zipCode: result.POSTAL,
             }));
 
             console.log(`Addresses found for ${zipCode}:`);
@@ -72,8 +68,10 @@ async function convertZipCodeToAddress(zipCode: string, saveToFile: boolean): Pr
             if (saveToFile) {
                 saveAddressesToFile(zipCode, addresses);
             }
+            return addresses;
         } else {
             console.log(`No addresses found for ${zipCode}.`);
+            return [];
         }
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -81,15 +79,16 @@ async function convertZipCodeToAddress(zipCode: string, saveToFile: boolean): Pr
         } else {
             console.error("An unknown error occurred while fetching data from OneMap API.");
         }
+        return [];
     }
 }
 
 /**
  * Convert address to zip code.
  * @param {string} address - The address to convert.
- * @returns {Promise<ZipCode>} - A promise that resolves with the converted zip code.
+ * @returns {Promise<Address[]>} - A promise that resolves with the converted addresses (containing zip codes).
  */
-async function convertAddressToZipCode(address: string): Promise<ZipCode> {
+export async function convertAddressToZipCode(address: string): Promise<Address[]> {
     try {
         const response = await axios.get(ONEMAP_API_URL, {
             params: {
@@ -97,37 +96,36 @@ async function convertAddressToZipCode(address: string): Promise<ZipCode> {
                 returnGeom: "Y",
                 getAddrDetails: "Y",
                 pageNum: 1,
-                key: ONEMAP_API_KEY,
             },
         });
 
         const { data } = response;
 
         if (data.found > 0) {
-            const result = data.results[0];
-            const zipCode: ZipCode = {
+            const addresses: Address[] = data.results.map((result: any) => ({
+                address: result.ADDRESS,
+                latitude: parseFloat(result.LATITUDE),
+                longitude: parseFloat(result.LONGITUDE),
                 zipCode: result.POSTAL,
-            };
+            }));
 
-            console.log(`Zip code found for ${address}:`);
-            console.log(zipCode);
+            console.log(`Zip codes found for ${address}:`);
+            console.log(addresses.map(a => ({ address: a.address, zipCode: a.zipCode })));
 
-            return zipCode;
+            return addresses;
         } else {
             console.log(`No zip code found for ${address}.`);
-            throw new Error(`No zip code found for ${address}.`);
+            return [];
         }
     } catch (error: unknown) {
         if (error instanceof Error) {
             console.error("Error fetching data from OneMap API:", error.message);
-            throw error;
         } else {
             console.error("An unknown error occurred while fetching data from OneMap API.");
-            throw new Error("An unknown error occurred while fetching data from OneMap API.");
         }
+        return [];
     }
 }
-
 
 // Set up CLI commands and options
 const program = new Command();
@@ -138,19 +136,19 @@ program
     .option("-z, --zipcode <zipcode>", "Convert zip code to address")
     .option("-a, --address <address>", "Convert address to zip code")
     .option("-f, --file", "Save addresses to a file", false)
-    .action((options: { zipcode: string; address: string; file: boolean }) => {
+    .action(async (options: { zipcode: string; address: string; file: boolean }) => {
         if (options.zipcode) {
             // Convert zip code to address
-            convertZipCodeToAddress(options.zipcode, options.file);
+            await convertZipCodeToAddress(options.zipcode, options.file);
         } else if (options.address) {
             // Convert address to zip code
-            convertAddressToZipCode(options.address).then(zipCode => {
-                console.log(`Zip code for address '${options.address}':`, zipCode);
-            });
+            await convertAddressToZipCode(options.address);
         } else {
             console.log("Please provide either a zip code or an address.");
         }
     });
 
-// Parse CLI arguments
-program.parse(process.argv);
+// Only parse arguments if this file is being run directly
+if (require.main === module) {
+    program.parse(process.argv);
+}

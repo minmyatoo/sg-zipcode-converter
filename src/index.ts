@@ -2,6 +2,7 @@
 import axios from "axios";
 import { Command } from "commander";
 import fs from "fs";
+import { promises as fsPromises } from "fs";
 
 // Set up OneMap API endpoint
 const ONEMAP_API_URL = "https://www.onemap.gov.sg/api/common/elastic/search";
@@ -24,15 +25,18 @@ interface ZipCode {
  * @param {string} zipCode - The zip code.
  * @param {Address[]} addresses - The addresses to save.
  */
-function saveAddressesToFile(zipCode: string, addresses: Address[]): void {
+async function saveAddressesToFile(zipCode: string, addresses: Address[]): Promise<void> {
     const fileName = `addresses_${zipCode}.json`;
-    fs.writeFile(fileName, JSON.stringify(addresses, null, 2), (error) => {
-        if (error) {
+    try {
+        await fs.promises.writeFile(fileName, JSON.stringify(addresses, null, 2));
+        console.log(`Addresses saved to ${fileName}.`);
+    } catch (error: unknown) {
+        if (error instanceof Error) {
             console.error("Error saving addresses to file:", error.message);
         } else {
-            console.log(`Addresses saved to ${fileName}.`);
+            console.error("An unknown error occurred while saving the file.");
         }
-    });
+    }
 }
 
 /**
@@ -66,7 +70,7 @@ export async function convertZipCodeToAddress(zipCode: string, saveToFile: boole
             console.log(addresses);
 
             if (saveToFile) {
-                saveAddressesToFile(zipCode, addresses);
+                await saveAddressesToFile(zipCode, addresses);
             }
             return addresses;
         } else {

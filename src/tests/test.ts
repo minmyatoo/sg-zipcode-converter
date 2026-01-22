@@ -1,6 +1,32 @@
 import { convertZipCodeToAddress, convertAddressToZipCode } from '../index';
 import assert from 'assert';
 import { test } from 'node:test';
+import fs from 'fs';
+
+test('convertZipCodeToAddress saves file when saveToFile is true', async () => {
+    const zipCode = '547528';
+    const fileName = `addresses_${zipCode}.json`;
+
+    // Clean up file if it exists
+    if (fs.existsSync(fileName)) {
+        fs.unlinkSync(fileName);
+    }
+
+    const addresses = await convertZipCodeToAddress(zipCode, true);
+    assert(Array.isArray(addresses), 'Should return an array of addresses');
+    assert.ok(addresses.length > 0, 'Should find at least one address');
+
+    // Verify file was created
+    assert.ok(fs.existsSync(fileName), 'File should have been created');
+
+    // Verify file content
+    const fileContent = fs.readFileSync(fileName, 'utf-8');
+    const savedAddresses = JSON.parse(fileContent);
+    assert.deepStrictEqual(savedAddresses, addresses, 'File content should match returned addresses');
+
+    // Clean up the file
+    fs.unlinkSync(fileName);
+});
 
 test('convertZipCodeToAddress returns data for valid zipcode', async () => {
     // 547528 is a valid SG zipcode (Gracehaven)
